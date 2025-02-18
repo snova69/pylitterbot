@@ -39,6 +39,16 @@ docker run -d \
 ## Usage
 Once the container is running, the MQTT client will connect to the specified MQTT broker and listen for commands. You can publish messages to the appropriate topics to control your robots.
 
+To Return information about your Litter Robot Products in your Account:
+publish to "litterbot/cmd/get_robots" with an empty string payload (i.e "" )
+
+the result will published to "litterbot/robots"
+
+To Return information about your Pets in your Account:
+pushish to "litterbot/cmd/get_pets" with an empty string payload (i.e "" )
+
+the result will published to "litterbot/pets"
+
 ## Contributing
 Contributions are welcome! Please feel free to submit a pull request or open an issue for any enhancements or bug fixes.
 
