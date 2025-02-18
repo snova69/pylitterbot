@@ -25,7 +25,7 @@ docker build -t pylitterbot2mqtt .
 After building the image, you can run the container using:
 
 ```
-docker run -d 
+docker run -d \
 -e LB2MQTT_BROKER=mqtt.example.com \
 -e LB2MQTT_PORT=1883 \
 -e LB2MQTT_USERNAME=mqtt-user \
