@@ -7,35 +7,10 @@ from pylitterbot import Account, LitterRobot3, LitterRobot4, FeederRobot
 LB2MQTT_BROKER = os.environ['LB2MQTT_BROKER']
 LB2MQTT_USERNAME = os.environ['LB2MQTT_USERNAME']
 LB2MQTT_PASSWORD = os.environ['LB2MQTT_PASSWORD']
-LB2MQTT_PORT = os.environ['LB2MQTT_PORT']
+LB2MQTT_PORT = int(os.environ['LB2MQTT_PORT'])
 LB2MQTT_TOPIC_PREFIX = os.environ['LB2MQTT_TOPIC_PREFIX']
 LB_USERNAME = os.environ['LB_USERNAME']
 LB_PASSWORD = os.environ['LB_PASSWORD']
-
-async def lb_main():
-    # Create an account.
-    account = Account()
-
-    try:
-        # Connect to the API and load robots.
-        await account.connect(username=LB_USERNAME, password=LB_PASSWORD, load_robots=True, load_pets=True)
-
-        # Print robots associated with account.
-        print("Robots:")
-        for robot in account.robots:
-            print(robot)
-
-        print("Pets:")
-        for pet in account.pets:
-            print(pet)
-            weight_history = await pet.fetch_weight_history()
-            for weight in weight_history:
-                print(weight)
-
-    finally:
-        # Disconnect from the API.
-        await account.disconnect()
-
 
 def connect_mqtt() -> mqtt_client:
     def on_connect(client, userdata, flags, rc):
@@ -57,7 +32,7 @@ def subscribe(client: mqtt_client):
         asyncio.run(handle_message(client, msg))
 
     client.on_message = on_message
-    client.subscribe(f"{LB2MQTT_TOPIC_PREFIX}/#")
+    client.subscribe(f"{LB2MQTT_TOPIC_PREFIX}/cmd/#")
 
 async def handle_message(client, msg):
     topic_parts = msg.topic.split('/')
@@ -65,14 +40,66 @@ async def handle_message(client, msg):
         return
 
     command = topic_parts[2]
-    payload = json.loads(msg.payload)
     print(f"command is: {command}")
+        
+    if (str(msg.payload.decode("utf-8")) != ""):
+        payload = json.loads(msg.payload)
 
     account = Account()
     try:
         await account.connect(username=LB_USERNAME, password=LB_PASSWORD, load_robots=True, load_pets=True)
+        if command == "get_robots":
+            for robot in account.robots:
+                client.publish(
+                    f"{LB2MQTT_TOPIC_PREFIX}/robots/{robot.name}", 
+                    json.dumps({
+                    "model": robot.model, 
+                    "serial": robot.serial,
+                    "id": robot.id,
+                    "online": robot.is_online,
+                    "night_light_mode_enabled": robot.night_light_mode_enabled,
+                    "panel_lock_enabled": robot.panel_lock_enabled,
+                    "power_status": f"{robot.power_status}",
+                    "setup_date": f"{robot.setup_date}",
+                    }, 
+                    ))
+        if command == "get_pets":
+            for pet in account.pets:
+                client.publish(
+                    f"{LB2MQTT_TOPIC_PREFIX}/pets/{pet.name}", 
+                    json.dumps({
+                    "id": pet.id,
+                    "pet_type": f"{pet.pet_type}",
+                    "gender": f"{pet.gender}",
+                    "estimated_weight": pet.estimated_weight,
+                    "last_weight_reading": pet.last_weight_reading,
+                    "weight": pet.weight,
+                    "birthday": f"{pet.birthday}",
+                    "adoption_date": f"{pet.adoption_date}",
+                    "diet": f"{pet.diet}",
+                    "environment_type": f"{pet.environment_type}",
+                    "health_concerns": json.dumps(pet.health_concerns),
+                    "breeds": json.dumps(pet.breeds),
+                    "image_url": f"{pet.image_url}",
+                    "is_active": pet.is_active,
+                    "is_fixed": pet.is_fixed,
+                    "pet_tag_id": pet.pet_tag_id,
+                    "weight_id_feature_enabled": pet.weight_id_feature_enabled,
+                    }, 
+                    ))
+                weight_history = await pet.fetch_weight_history()
+                for weighthist in weight_history:
+                    client.publish(
+                        f"{LB2MQTT_TOPIC_PREFIX}/pets/{pet.name}/weight-history", 
+                        json.dumps({
+                        f"{weighthist.timestamp}": f"{weighthist.weight}",
+                        }, 
+                        ))
 
-        if command == "refresh":
+
+
+# all the remaining messages require JSON Payload containing the id
+        elif command == "refresh":
             await account.refresh_robots()
         elif command == "start_cleaning":
             robot_id = payload.get("robot_id")
@@ -156,5 +183,4 @@ def run():
     client.loop_forever()
 
 if __name__ == "__main__":
-    asyncio.run(lb_main())
     run()
